@@ -1,6 +1,7 @@
 package invoice
 
 import (
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,9 +27,9 @@ func (s *Service) Create(invoice Invoice) Invoice {
 		net += invoice.Items[i].Total
 	}
 
-	invoice.NetTotal = net
-	invoice.VATAmount = net * invoice.VATRate
-	invoice.GrossTotal = net + invoice.VATAmount
+	invoice.NetTotal = math.Round(net*100) / 100
+	invoice.VATAmount = math.Round(net*invoice.VATRate*100) / 100
+	invoice.GrossTotal = math.Round((invoice.NetTotal+invoice.VATAmount)*100) / 100
 
 	return s.repo.Create(invoice)
 }

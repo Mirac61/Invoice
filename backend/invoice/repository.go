@@ -26,8 +26,8 @@ func (r *Repository) Create(invoice Invoice) Invoice {
 }
 
 func (r *Repository) GetByID(id string) (Invoice, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	invoice, ok := r.invoices[id]
 	if !ok {
 		return Invoice{}, ErrNotFound
@@ -36,8 +36,8 @@ func (r *Repository) GetByID(id string) (Invoice, error) {
 }
 
 func (r *Repository) GetAll() []Invoice {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	result := make([]Invoice, 0, len(r.invoices))
 	for _, invoice := range r.invoices {
 		result = append(result, invoice)
