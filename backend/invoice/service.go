@@ -63,6 +63,11 @@ func (s *Service) Update(id string, existing Invoice) (Invoice, error) {
 	if invoice.Status != StatusDraft {
 		return Invoice{}, ErrNotUpdatable
 	}
+	existing.ID = invoice.ID
+	existing.InvoiceNumber = invoice.InvoiceNumber
+	existing.Status = invoice.Status
+	existing.CreatedAt = invoice.CreatedAt
+	existing.IssuedAt = invoice.IssuedAt
 	existing.NetTotal, existing.VATAmount, existing.GrossTotal = calculateTotals(existing.Items, existing.VATRate)
 	return s.repo.Update(id, existing)
 }
