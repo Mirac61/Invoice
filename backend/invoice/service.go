@@ -31,6 +31,7 @@ func calculateTotals(items []LineItem, vatRate float64) (net, vat, gross float64
 func (s *Service) Create(invoice Invoice) Invoice {
 	invoice.ID = uuid.NewString()
 	invoice.CreatedAt = time.Now()
+	invoice.Status = StatusDraft
 
 	invoice.NetTotal, invoice.VATAmount, invoice.GrossTotal = calculateTotals(invoice.Items, invoice.VATRate)
 	return s.repo.Create(invoice)
