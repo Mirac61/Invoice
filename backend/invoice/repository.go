@@ -5,7 +5,10 @@ import (
 	"sync"
 )
 
-var ErrNotFound = errors.New("No Invoice found")
+var (
+	ErrNotFound     = errors.New("invoice not found")
+	ErrNotDeletable = errors.New("invoice isn't deletable")
+)
 
 type Repository struct {
 	invoices map[string]Invoice

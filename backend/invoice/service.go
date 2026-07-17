@@ -43,5 +43,12 @@ func (s *Service) GetAll() []Invoice {
 }
 
 func (s *Service) Delete(id string) error {
+	invoice, err := s.repo.GetByID(id)
+	if err != nil{
+		return err
+	}
+	if invoice.Status != StatusDraft{
+		return ErrNotDeletable
+	}
 	return s.repo.Delete(id)
 }
