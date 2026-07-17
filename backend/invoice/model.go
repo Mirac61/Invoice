@@ -2,21 +2,30 @@ package invoice
 
 import "time"
 
+type InvoiceStatus string
+
+const (
+	StatusDraft     InvoiceStatus = "draft"
+	StatusIssued    InvoiceStatus = "issued"
+	StatusPaid      InvoiceStatus = "paid"
+	StatusCancelled InvoiceStatus = "cancelled"
+)
+
 type Invoice struct {
-	ID            string     `json:"id"`
-	InvoiceNumber string     `json:"invoiceNumber"`
-	Status        string     `json:"status"`
-	CreatedAt     time.Time  `json:"createdAt"`
-	IssuedAt      time.Time  `json:"issuedAt"`
-	PaymentDueAt  time.Time  `json:"paymentDueAt"`
-	Sender        Contact    `json:"sender"`
-	Recipient     Contact    `json:"recipient"`
-	Items         []LineItem `json:"items"`
-	VATRate       float64    `json:"vatRate"`
-	NetTotal      float64    `json:"netTotal"`
-	VATAmount     float64    `json:"vatAmount"`
-	GrossTotal    float64    `json:"grossTotal"`
-	Notes         string     `json:"notes"`
+	ID            string        `json:"id"`
+	InvoiceNumber string        `json:"invoiceNumber"`
+	Status        InvoiceStatus `json:"status"`
+	CreatedAt     time.Time     `json:"createdAt"`
+	IssuedAt      time.Time     `json:"issuedAt"`
+	PaymentDueAt  time.Time     `json:"paymentDueAt"`
+	Sender        Contact       `json:"sender"`
+	Recipient     Contact       `json:"recipient"`
+	Items         []LineItem    `json:"items"`
+	VATRate       float64       `json:"vatRate"`
+	NetTotal      float64       `json:"netTotal"`
+	VATAmount     float64       `json:"vatAmount"`
+	GrossTotal    float64       `json:"grossTotal"`
+	Notes         string        `json:"notes"`
 }
 
 type Contact struct {
