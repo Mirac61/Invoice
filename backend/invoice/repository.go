@@ -6,8 +6,8 @@ import (
 )
 
 var (
-	ErrNotFound     = errors.New("No Invoice found")
-	ErrNotDeletable = errors.New("This Invoice istn't deletable")
+	ErrNotFound     = errors.New("invoice not found")
+	ErrNotDeletable = errors.New("invoice isn't deletable")
 )
 
 type Repository struct {
