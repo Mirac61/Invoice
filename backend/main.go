@@ -24,7 +24,7 @@ func main() {
 	r.GET("/api/invoices/:id", handler.GetByID)
 	r.DELETE("/api/invoices/:id", handler.Delete)
 	r.PUT("/api/invoices/:id", handler.Update)
-	//	r.PATCH("/api/invoices/:id", handler.PartialUpdate)
+	r.PATCH("/api/invoices/:id", handler.PartialUpdate)
 
 	r.Run(":8080")
 }
