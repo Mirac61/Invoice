@@ -8,6 +8,7 @@ import (
 var (
 	ErrNotFound     = errors.New("invoice not found")
 	ErrNotDeletable = errors.New("invoice isn't deletable")
+	ErrNotUpdatable = errors.New("invoice not updatable")
 )
 
 type Repository struct {
@@ -32,6 +33,7 @@ func (r *Repository) GetByID(id string) (Invoice, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	invoice, ok := r.invoices[id]
+
 	if !ok {
 		return Invoice{}, ErrNotFound
 	}
@@ -42,6 +44,7 @@ func (r *Repository) GetAll() []Invoice {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	result := make([]Invoice, 0, len(r.invoices))
+
 	for _, invoice := range r.invoices {
 		result = append(result, invoice)
 	}
@@ -51,9 +54,23 @@ func (r *Repository) GetAll() []Invoice {
 func (r *Repository) Delete(id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	if _, ok := r.invoices[id]; !ok {
 		return ErrNotFound
 	}
 	delete(r.invoices, id)
 	return nil
+}
+
+func (r *Repository) Update(id string, updated Invoice) (Invoice, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	existing, ok := r.invoices[id]
+
+	if !ok {
+		return Invoice{}, ErrNotFound
+	}
+	updated.ID = existing.ID
+	r.invoices[id] = updated
+	return updated, nil
 }

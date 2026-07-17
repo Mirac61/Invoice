@@ -52,3 +52,14 @@ func (s *Service) Delete(id string) error {
 	}
 	return s.repo.Delete(id)
 }
+
+func (s *Service) Update(id string, existing Invoice) (Invoice, error){
+	invoice, err := s.repo.GetByID(id)
+	if err != nil{
+		return Invoice{}, err
+	}
+	if invoice.Status != StatusDraft{
+		return Invoice{}, ErrNotUpdatable
+	}
+	return s.repo.Update(id, existing)
+}
