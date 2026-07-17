@@ -1,8 +1,7 @@
 package main
 
 import (
-	"net/http"
-
+	"github.com/Mirac61/Invoice/backend/invoice"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
@@ -16,16 +15,14 @@ func main() {
 		AllowHeaders: []string{"Content-Type"},
 	}))
 
-	r.GET("/api/invoices", getInvoices)
-	r.POST("/api/invoices", createInvoice)
+	repo := invoice.NewRepository()
+	service := invoice.NewService(repo)
+	handler := invoice.NewHandler(service)
+
+	r.POST("/api/invoices", handler.Create)
+	r.GET("/api/invoices", handler.GetAll)
+	r.GET("/api/invoices/:id", handler.GetByID)
+	r.DELETE("/api/invoices/:id", handler.Delete)
 
 	r.Run(":8080")
-}
-
-func getInvoices(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"invoices": []string{}})
-}
-
-func createInvoice(c *gin.Context) {
-	c.JSON(http.StatusCreated, gin.H{"message": "created"})
 }
