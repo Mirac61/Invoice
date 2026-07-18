@@ -75,7 +75,7 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 	if errors.Is(err, ErrNotUpdatable) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, updated)
@@ -95,7 +95,7 @@ func (h *Handler) PartialUpdate(c *gin.Context) {
 		return
 	}
 	if errors.Is(err, ErrNotUpdatable) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, updated)

@@ -19,7 +19,7 @@ func NewService(repo *Repository) *Service {
 
 func calculateTotals(items []LineItem, vatRate float64) (net, vat, gross float64) {
 	for i := range items {
-		items[i].Total = float64(items[i].Quantity) * items[i].UnitPrice
+		items[i].Total = math.Round(float64(items[i].Quantity)*items[i].UnitPrice*100) / 100
 		net += items[i].Total
 	}
 	net = math.Round(net*100) / 100

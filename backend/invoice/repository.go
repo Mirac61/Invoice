@@ -22,31 +22,35 @@ func NewRepository() *Repository {
 	}
 }
 
+func cloneInvoice(invoice Invoice) Invoice {
+	invoice.Items = append([]LineItem(nil), invoice.Items...)
+	return invoice
+}
+
 func (r *Repository) Create(invoice Invoice) Invoice {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.invoices[invoice.ID] = invoice
-	return invoice
+	stored := cloneInvoice(invoice)
+	r.invoices[stored.ID] = stored
+	return cloneInvoice(stored)
 }
 
 func (r *Repository) GetByID(id string) (Invoice, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	invoice, ok := r.invoices[id]
-
 	if !ok {
 		return Invoice{}, ErrNotFound
 	}
-	return invoice, nil
+	return cloneInvoice(invoice), nil
 }
 
 func (r *Repository) GetAll() []Invoice {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	result := make([]Invoice, 0, len(r.invoices))
-
 	for _, invoice := range r.invoices {
-		result = append(result, invoice)
+		result = append(result, cloneInvoice(invoice))
 	}
 	return result
 }
@@ -54,7 +58,6 @@ func (r *Repository) GetAll() []Invoice {
 func (r *Repository) Delete(id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
 	if _, ok := r.invoices[id]; !ok {
 		return ErrNotFound
 	}
@@ -66,11 +69,11 @@ func (r *Repository) Update(id string, updated Invoice) (Invoice, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	existing, ok := r.invoices[id]
-
 	if !ok {
 		return Invoice{}, ErrNotFound
 	}
 	updated.ID = existing.ID
-	r.invoices[id] = updated
-	return updated, nil
+	stored := cloneInvoice(updated)
+	r.invoices[id] = stored
+	return cloneInvoice(stored), nil
 }
