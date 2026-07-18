@@ -65,12 +65,20 @@ func (r *Repository) Delete(id string) error {
 	return nil
 }
 
-func (r *Repository) Update(id string, updated Invoice) (Invoice, error) {
+// UpdateFunc verändert eine Rechnung. Sie läuft unter dem Repository-Lock,
+// damit Lesen, Ändern und Schreiben atomar sind.
+type UpdateFunc func(existing Invoice) (Invoice, error)
+
+func (r *Repository) Update(id string, fn UpdateFunc) (Invoice, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	existing, ok := r.invoices[id]
 	if !ok {
 		return Invoice{}, ErrNotFound
+	}
+	updated, err := fn(cloneInvoice(existing))
+	if err != nil {
+		return Invoice{}, err
 	}
 	updated.ID = existing.ID
 	stored := cloneInvoice(updated)

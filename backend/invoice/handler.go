@@ -78,6 +78,10 @@ func (h *Handler) Update(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, updated)
 }
 
@@ -96,6 +100,10 @@ func (h *Handler) PartialUpdate(c *gin.Context) {
 	}
 	if errors.Is(err, ErrNotUpdatable) {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, updated)

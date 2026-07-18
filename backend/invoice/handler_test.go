@@ -227,4 +227,15 @@ func TestPartialUpdateHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
+
+	t.Run("zero paymentDueAt returns 400", func(t *testing.T) {
+		r, _ := setupRouter()
+		id := createInvoice(t, r)
+
+		w := doRequest(r, http.MethodPatch, "/api/invoices/"+id, map[string]any{
+			"paymentDueAt": "0001-01-01T00:00:00Z",
+		})
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
 }
