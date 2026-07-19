@@ -2,19 +2,25 @@ package invoice
 
 import (
 	"errors"
+	"fmt"
 	"sync"
+	"time"
 )
 
 var (
-	ErrNotFound     = errors.New("invoice not found")
-	ErrNotDeletable = errors.New("invoice isn't deletable")
-	ErrNotUpdatable = errors.New("invoice not updatable")
-	ErrInvalidInput = errors.New("invalid invoice data")
+	ErrNotFound          = errors.New("invoice not found")
+	ErrNotDeletable      = errors.New("invoice isn't deletable")
+	ErrNotUpdatable      = errors.New("invoice not updatable")
+	ErrInvalidInput      = errors.New("invalid invoice data")
+	ErrInvalidTransition = errors.New("invalid status transition")
 )
 
 type Repository struct {
-	invoices map[string]Invoice
-	mu       sync.RWMutex
+	invoices    map[string]Invoice
+	mu          sync.RWMutex
+	counterMu   sync.Mutex
+	counterYear int
+	counter     int
 }
 
 func NewRepository() *Repository {
@@ -26,6 +32,18 @@ func NewRepository() *Repository {
 func cloneInvoice(invoice Invoice) Invoice {
 	invoice.Items = append([]LineItem(nil), invoice.Items...)
 	return invoice
+}
+
+func (r *Repository) NextInvoiceNumber(now time.Time) string {
+	r.counterMu.Lock()
+	defer r.counterMu.Unlock()
+	year := now.Year()
+	if year != r.counterYear {
+		r.counterYear = year
+		r.counter = 0
+	}
+	r.counter++
+	return fmt.Sprintf("%d-%04d", year, r.counter)
 }
 
 func (r *Repository) Create(invoice Invoice) Invoice {

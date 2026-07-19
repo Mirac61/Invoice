@@ -120,3 +120,16 @@ func (s *Service) PartialUpdate(id string, patch InvoicePatch) (Invoice, error) 
 
 	return s.repo.Update(id, mutate)
 }
+
+func (s *Service) Issue(id string) (Invoice, error) {
+	return s.repo.Update(id, func(invoice Invoice) (Invoice, error) {
+		if invoice.Status != StatusDraft {
+			return Invoice{}, ErrInvalidTransition
+		}
+		now := time.Now()
+		invoice.Status = StatusIssued
+		invoice.IssuedAt = now
+		invoice.InvoiceNumber = s.repo.NextInvoiceNumber(now)
+		return invoice, nil
+	})
+}

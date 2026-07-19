@@ -181,3 +181,68 @@ func TestUpdate_InvalidData_ReturnsInvalidInput(t *testing.T) {
 
 	assert.ErrorIs(t, err, ErrInvalidInput)
 }
+
+func TestIssue_Draft_SetsNumberAndTimestamp(t *testing.T) {
+	s := newTestService()
+	created := seedDraftInvoice(s)
+
+	issued, err := s.Issue(created.ID)
+
+	require.NoError(t, err)
+	assert.Equal(t, StatusIssued, issued.Status)
+	assert.False(t, issued.IssuedAt.IsZero())
+	assert.Regexp(t, `^\d{4}-\d{4}$`, issued.InvoiceNumber)
+}
+
+func TestIssue_AssignsSequentialNumbers(t *testing.T) {
+	s := newTestService()
+	first := seedDraftInvoice(s)
+	second := seedDraftInvoice(s)
+
+	a, err := s.Issue(first.ID)
+	require.NoError(t, err)
+	b, err := s.Issue(second.ID)
+	require.NoError(t, err)
+
+	assert.Regexp(t, `^\d{4}-0001$`, a.InvoiceNumber)
+	assert.Regexp(t, `^\d{4}-0002$`, b.InvoiceNumber)
+}
+
+func TestIssue_AlreadyIssued_ReturnsInvalidTransition(t *testing.T) {
+	s := newTestService()
+	created := seedDraftInvoice(s)
+
+	_, err := s.Issue(created.ID)
+	require.NoError(t, err)
+
+	_, err = s.Issue(created.ID)
+	assert.ErrorIs(t, err, ErrInvalidTransition)
+}
+
+func TestIssue_UnknownID_ReturnsNotFound(t *testing.T) {
+	s := newTestService()
+
+	_, err := s.Issue("does-not-exist")
+
+	assert.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestIssue_ThenUpdate_ReturnsNotUpdatable(t *testing.T) {
+	s := newTestService()
+	created := seedDraftInvoice(s)
+
+	issued, err := s.Issue(created.ID)
+	require.NoError(t, err)
+
+	notes := "zu spät"
+	_, err = s.PartialUpdate(issued.ID, InvoicePatch{Notes: &notes})
+
+	assert.ErrorIs(t, err, ErrNotUpdatable)
+}
+
+func TestNextInvoiceNumber_ResetsOnNewYear(t *testing.T) {
+	repo := NewRepository()
+
+	assert.Equal(t, "2025-0001", repo.NextInvoiceNumber(time.Date(2025, 12, 31, 23, 0, 0, 0, time.UTC)))
+	assert.Equal(t, "2026-0001", repo.NextInvoiceNumber(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)))
+}
