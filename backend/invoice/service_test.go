@@ -241,3 +241,10 @@ func TestIssue_ThenUpdate_ReturnsNotUpdatable(t *testing.T) {
 
 	assert.ErrorIs(t, err, ErrNotUpdatable)
 }
+
+func TestNextInvoiceNumber_ResetsOnNewYear(t *testing.T) {
+	repo := NewRepository()
+
+	assert.Equal(t, "2025-0001", repo.NextInvoiceNumber(time.Date(2025, 12, 31, 23, 0, 0, 0, time.UTC)))
+	assert.Equal(t, "2026-0001", repo.NextInvoiceNumber(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)))
+}
