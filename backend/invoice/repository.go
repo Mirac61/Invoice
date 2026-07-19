@@ -18,7 +18,7 @@ var (
 type Repository struct {
 	invoices    map[string]Invoice
 	mu          sync.RWMutex
-	counterMu   sync.RWMutex
+	counterMu   sync.Mutex
 	counterYear int
 	counter     int
 }
