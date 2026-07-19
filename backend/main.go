@@ -20,6 +20,7 @@ func main() {
 	handler := invoice.NewHandler(service)
 
 	r.POST("/api/invoices", handler.Create)
+	r.POST("/api/invoices/:id/issue", handler.Issue)
 	r.GET("/api/invoices", handler.GetAll)
 	r.GET("/api/invoices/:id", handler.GetByID)
 	r.DELETE("/api/invoices/:id", handler.Delete)

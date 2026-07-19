@@ -116,3 +116,21 @@ func (h *Handler) PartialUpdate(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, updated)
 }
+
+func (h *Handler) Issue(c *gin.Context) {
+	id := c.Param("id")
+	issued, err := h.service.Issue(id)
+	if errors.Is(err, ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	if errors.Is(err, ErrInvalidTransition) {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, issued)
+}

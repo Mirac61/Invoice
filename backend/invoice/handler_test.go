@@ -21,6 +21,7 @@ func setupRouter() (*gin.Engine, *Service) {
 
 	r := gin.New()
 	r.POST("/api/invoices", handler.Create)
+	r.POST("/api/invoices/:id/issue", handler.Issue)
 	r.GET("/api/invoices", handler.GetAll)
 	r.GET("/api/invoices/:id", handler.GetByID)
 	r.DELETE("/api/invoices/:id", handler.Delete)
@@ -237,5 +238,48 @@ func TestPartialUpdateHandler(t *testing.T) {
 		})
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+}
+
+func TestIssueHandler(t *testing.T) {
+	t.Run("draft returns 200 with number", func(t *testing.T) {
+		r, _ := setupRouter()
+		id := createInvoice(t, r)
+
+		w := doRequest(r, http.MethodPost, "/api/invoices/"+id+"/issue", nil)
+
+		require.Equal(t, http.StatusOK, w.Code)
+		var issued Invoice
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &issued))
+		assert.Equal(t, StatusIssued, issued.Status)
+		assert.NotEmpty(t, issued.InvoiceNumber)
+	})
+
+	t.Run("already issued returns 409", func(t *testing.T) {
+		r, _ := setupRouter()
+		id := createInvoice(t, r)
+		require.Equal(t, http.StatusOK, doRequest(r, http.MethodPost, "/api/invoices/"+id+"/issue", nil).Code)
+
+		w := doRequest(r, http.MethodPost, "/api/invoices/"+id+"/issue", nil)
+
+		assert.Equal(t, http.StatusConflict, w.Code)
+	})
+
+	t.Run("unknown returns 404", func(t *testing.T) {
+		r, _ := setupRouter()
+
+		w := doRequest(r, http.MethodPost, "/api/invoices/does-not-exist/issue", nil)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("patch after issue returns 409", func(t *testing.T) {
+		r, _ := setupRouter()
+		id := createInvoice(t, r)
+		require.Equal(t, http.StatusOK, doRequest(r, http.MethodPost, "/api/invoices/"+id+"/issue", nil).Code)
+
+		w := doRequest(r, http.MethodPatch, "/api/invoices/"+id, map[string]any{"notes": "x"})
+
+		assert.Equal(t, http.StatusConflict, w.Code)
 	})
 }
