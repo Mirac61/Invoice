@@ -11,7 +11,7 @@ func main() {
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins: []string{"http://localhost:5173"},
-		AllowMethods: []string{"GET", "POST", "PUT", "DELETE"},
+		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE"},
 		AllowHeaders: []string{"Content-Type"},
 	}))
 
@@ -23,6 +23,8 @@ func main() {
 	r.GET("/api/invoices", handler.GetAll)
 	r.GET("/api/invoices/:id", handler.GetByID)
 	r.DELETE("/api/invoices/:id", handler.Delete)
+	r.PUT("/api/invoices/:id", handler.Update)
+	r.PATCH("/api/invoices/:id", handler.PartialUpdate)
 
 	r.Run(":8080")
 }

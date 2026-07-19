@@ -8,6 +8,8 @@ import (
 var (
 	ErrNotFound     = errors.New("invoice not found")
 	ErrNotDeletable = errors.New("invoice isn't deletable")
+	ErrNotUpdatable = errors.New("invoice not updatable")
+	ErrInvalidInput = errors.New("invalid invoice data")
 )
 
 type Repository struct {
@@ -21,11 +23,17 @@ func NewRepository() *Repository {
 	}
 }
 
+func cloneInvoice(invoice Invoice) Invoice {
+	invoice.Items = append([]LineItem(nil), invoice.Items...)
+	return invoice
+}
+
 func (r *Repository) Create(invoice Invoice) Invoice {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.invoices[invoice.ID] = invoice
-	return invoice
+	stored := cloneInvoice(invoice)
+	r.invoices[stored.ID] = stored
+	return cloneInvoice(stored)
 }
 
 func (r *Repository) GetByID(id string) (Invoice, error) {
@@ -35,7 +43,7 @@ func (r *Repository) GetByID(id string) (Invoice, error) {
 	if !ok {
 		return Invoice{}, ErrNotFound
 	}
-	return invoice, nil
+	return cloneInvoice(invoice), nil
 }
 
 func (r *Repository) GetAll() []Invoice {
@@ -43,7 +51,7 @@ func (r *Repository) GetAll() []Invoice {
 	defer r.mu.RUnlock()
 	result := make([]Invoice, 0, len(r.invoices))
 	for _, invoice := range r.invoices {
-		result = append(result, invoice)
+		result = append(result, cloneInvoice(invoice))
 	}
 	return result
 }
@@ -56,4 +64,25 @@ func (r *Repository) Delete(id string) error {
 	}
 	delete(r.invoices, id)
 	return nil
+}
+
+// UpdateFunc mutates an invoice. It runs under the repository lock so that
+// read, modify and write happen atomically.
+type UpdateFunc func(existing Invoice) (Invoice, error)
+
+func (r *Repository) Update(id string, fn UpdateFunc) (Invoice, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	existing, ok := r.invoices[id]
+	if !ok {
+		return Invoice{}, ErrNotFound
+	}
+	updated, err := fn(cloneInvoice(existing))
+	if err != nil {
+		return Invoice{}, err
+	}
+	updated.ID = existing.ID
+	stored := cloneInvoice(updated)
+	r.invoices[id] = stored
+	return cloneInvoice(stored), nil
 }
