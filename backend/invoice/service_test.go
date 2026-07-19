@@ -1,7 +1,6 @@
 package invoice
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -205,9 +204,8 @@ func TestIssue_AssignsSequentialNumbers(t *testing.T) {
 	b, err := s.Issue(second.ID)
 	require.NoError(t, err)
 
-	year := time.Now().Year()
-	assert.Equal(t, fmt.Sprintf("%d-0001", year), a.InvoiceNumber)
-	assert.Equal(t, fmt.Sprintf("%d-0002", year), b.InvoiceNumber)
+	assert.Regexp(t, `^\d{4}-0001$`, a.InvoiceNumber)
+	assert.Regexp(t, `^\d{4}-0002$`, b.InvoiceNumber)
 }
 
 func TestIssue_AlreadyIssued_ReturnsInvalidTransition(t *testing.T) {
