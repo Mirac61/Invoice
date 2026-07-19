@@ -32,8 +32,11 @@ func validateInvoiceData(items []LineItem, vatRate float64) error {
 	if vatRate < 0 || vatRate > 1 {
 		return ErrInvalidInput
 	}
+	if len(items) == 0 {
+		return ErrInvalidInput
+	}
 	for _, item := range items {
-		if item.Quantity <= 0 || item.UnitPrice < 0 {
+		if item.Description == "" || item.Quantity <= 0 || item.UnitPrice < 0 {
 			return ErrInvalidInput
 		}
 	}
