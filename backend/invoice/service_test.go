@@ -159,3 +159,25 @@ func TestDelete_Draft_Succeeds(t *testing.T) {
 	_, getErr := s.GetByID(created.ID)
 	assert.ErrorIs(t, getErr, ErrNotFound)
 }
+
+func TestPartialUpdate_InvalidData_ReturnsInvalidInput(t *testing.T) {
+	s := newTestService()
+	created := seedDraftInvoice(s)
+
+	items := []LineItem{{Description: "X", Quantity: -1, UnitPrice: 10}}
+	_, err := s.PartialUpdate(created.ID, InvoicePatch{Items: &items})
+
+	assert.ErrorIs(t, err, ErrInvalidInput)
+}
+
+func TestUpdate_InvalidData_ReturnsInvalidInput(t *testing.T) {
+	s := newTestService()
+	created := seedDraftInvoice(s)
+
+	replacement := created
+	replacement.VATRate = 1.5
+
+	_, err := s.Update(created.ID, replacement)
+
+	assert.ErrorIs(t, err, ErrInvalidInput)
+}

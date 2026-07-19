@@ -28,6 +28,18 @@ func calculateTotals(items []LineItem, vatRate float64) (net, vat, gross float64
 	return
 }
 
+func validateInvoiceData(items []LineItem, vatRate float64) error {
+	if vatRate < 0 || vatRate > 1 {
+		return ErrInvalidInput
+	}
+	for _, item := range items {
+		if item.Quantity <= 0 || item.UnitPrice < 0 {
+			return ErrInvalidInput
+		}
+	}
+	return nil
+}
+
 func (s *Service) Create(invoice Invoice) Invoice {
 	invoice.ID = uuid.NewString()
 	invoice.CreatedAt = time.Now()
@@ -66,12 +78,14 @@ func (s *Service) Update(id string, replacement Invoice) (Invoice, error) {
 		replacement.Status = invoice.Status
 		replacement.CreatedAt = invoice.CreatedAt
 		replacement.IssuedAt = invoice.IssuedAt
+		if err := validateInvoiceData(replacement.Items, replacement.VATRate); err != nil {
+			return Invoice{}, err
+		}
 		replacement.NetTotal, replacement.VATAmount, replacement.GrossTotal = calculateTotals(replacement.Items, replacement.VATRate)
 		return replacement, nil
 	}
 
-	updated, err := s.repo.Update(id, mutate)
-	return updated, err
+	return s.repo.Update(id, mutate)
 }
 
 func (s *Service) PartialUpdate(id string, patch InvoicePatch) (Invoice, error) {
@@ -94,10 +108,12 @@ func (s *Service) PartialUpdate(id string, patch InvoicePatch) (Invoice, error) 
 		if patch.VATRate != nil {
 			invoice.VATRate = *patch.VATRate
 		}
+		if err := validateInvoiceData(invoice.Items, invoice.VATRate); err != nil {
+			return Invoice{}, err
+		}
 		invoice.NetTotal, invoice.VATAmount, invoice.GrossTotal = calculateTotals(invoice.Items, invoice.VATRate)
 		return invoice, nil
 	}
 
-	updated, err := s.repo.Update(id, mutate)
-	return updated, err
+	return s.repo.Update(id, mutate)
 }

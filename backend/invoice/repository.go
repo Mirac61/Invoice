@@ -9,6 +9,7 @@ var (
 	ErrNotFound     = errors.New("invoice not found")
 	ErrNotDeletable = errors.New("invoice isn't deletable")
 	ErrNotUpdatable = errors.New("invoice not updatable")
+	ErrInvalidInput = errors.New("invalid invoice data")
 )
 
 type Repository struct {
@@ -65,8 +66,8 @@ func (r *Repository) Delete(id string) error {
 	return nil
 }
 
-// UpdateFunc verändert eine Rechnung. Sie läuft unter dem Repository-Lock,
-// damit Lesen, Ändern und Schreiben atomar sind.
+// UpdateFunc mutates an invoice. It runs under the repository lock so that
+// read, modify and write happen atomically.
 type UpdateFunc func(existing Invoice) (Invoice, error)
 
 func (r *Repository) Update(id string, fn UpdateFunc) (Invoice, error) {

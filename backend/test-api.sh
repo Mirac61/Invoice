@@ -21,10 +21,12 @@ fi
 
 step() { echo; echo "${BOLD}==> $*${RESET}"; }
 
-# call METHOD PATH [JSON-BODY]
+# call METHOD PATH [JSON-BODY] [EXPECTED-STATUS]
 # Gibt Statuscode + hübsch formatierten Body aus und liefert den Body zurück.
+# EXPECTED-STATUS ist optional; ohne Angabe wird ein 2xx erwartet. Weicht der
+# tatsächliche Status ab, schlägt der Aufruf fehl (Rückgabewert 1).
 call() {
-	local method="$1" path="$2" body="${3:-}"
+	local method="$1" path="$2" body="${3:-}" expect="${4:-}"
 	local args=(-sS -X "$method" -w $'\n%{http_code}')
 	if [ -n "$body" ]; then
 		args+=(-H "Content-Type: application/json" -d "$body")
@@ -40,6 +42,17 @@ call() {
 	if [ -n "$out" ]; then
 		echo "$out" | jq . >&2 2>/dev/null || echo "  $out" >&2
 	fi
+
+	if [ -n "$expect" ]; then
+		if [ "$code" != "$expect" ]; then
+			echo "  ${BOLD}FEHLER: erwartet HTTP $expect, erhalten $code${RESET}" >&2
+			return 1
+		fi
+	elif [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+		echo "  ${BOLD}FEHLER: erwartet 2xx, erhalten $code${RESET}" >&2
+		return 1
+	fi
+
 	echo "$out"   # nur der Body geht auf stdout (für Weiterverarbeitung)
 }
 
@@ -95,6 +108,6 @@ step "DELETE $API/$id  (löschen)"
 call DELETE "/api/invoices/$id" >/dev/null
 
 step "GET    $API/$id  (sollte 404 sein)"
-call GET "/api/invoices/$id" >/dev/null || true
+call GET "/api/invoices/$id" "" 404 >/dev/null
 
 echo; echo "${BOLD}Fertig.${RESET}"
