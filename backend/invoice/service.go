@@ -7,14 +7,21 @@ import (
 	"github.com/google/uuid"
 )
 
-type Service struct {
-	repo *Repository
+type invoiceRepository interface {
+	Create(invoice Invoice) Invoice
+	GetByID(id string) (Invoice, error)
+	GetAll() []Invoice
+	Delete(id string) error
+	Update(id string, fn UpdateFunc) (Invoice, error)
+	NextInvoiceNumber(now time.Time) string
 }
 
-func NewService(repo *Repository) *Service {
-	return &Service{
-		repo: repo,
-	}
+type Service struct {
+	repo invoiceRepository
+}
+
+func NewService(repo invoiceRepository) *Service {
+	return &Service{repo: repo}
 }
 
 func calculateTotals(items []LineItem, vatRate float64) (net, vat, gross float64) {
