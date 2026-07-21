@@ -30,7 +30,7 @@ func main() {
 		AllowHeaders: []string{"Content-Type"},
 	}))
 
-	repo := invoice.NewRepository()
+	repo := invoice.NewPostgresRepository(pool)
 	service := invoice.NewService(repo)
 	handler := invoice.NewHandler(service)
 

@@ -23,7 +23,11 @@ func (h *Handler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	created := h.service.Create(invoice)
+	created, err := h.service.Create(invoice)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusCreated, created)
 }
 
@@ -38,7 +42,11 @@ func (h *Handler) GetByID(c *gin.Context) {
 }
 
 func (h *Handler) GetAll(c *gin.Context) {
-	invoices := h.service.GetAll()
+	invoices, err := h.service.GetAll()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, invoices)
 }
 

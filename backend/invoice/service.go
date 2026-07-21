@@ -8,12 +8,12 @@ import (
 )
 
 type invoiceRepository interface {
-	Create(invoice Invoice) Invoice
+	Create(invoice Invoice) (Invoice, error)
 	GetByID(id string) (Invoice, error)
-	GetAll() []Invoice
+	GetAll() ([]Invoice, error)
 	Delete(id string) error
 	Update(id string, fn UpdateFunc) (Invoice, error)
-	NextInvoiceNumber(now time.Time) string
+	NextInvoiceNumber(now time.Time) (string, error)
 }
 
 type Service struct {
@@ -50,12 +50,14 @@ func validateInvoiceData(items []LineItem, vatRate float64) error {
 	return nil
 }
 
-func (s *Service) Create(invoice Invoice) Invoice {
+func (s *Service) Create(invoice Invoice) (Invoice, error) {
 	invoice.ID = uuid.NewString()
 	invoice.CreatedAt = time.Now()
 	invoice.Status = StatusDraft
-
 	invoice.NetTotal, invoice.VATAmount, invoice.GrossTotal = calculateTotals(invoice.Items, invoice.VATRate)
+	for i := range invoice.Items {
+		invoice.Items[i].ID = uuid.NewString()
+	}
 	return s.repo.Create(invoice)
 }
 
@@ -63,7 +65,7 @@ func (s *Service) GetByID(id string) (Invoice, error) {
 	return s.repo.GetByID(id)
 }
 
-func (s *Service) GetAll() []Invoice {
+func (s *Service) GetAll() ([]Invoice, error) {
 	return s.repo.GetAll()
 }
 
@@ -136,7 +138,11 @@ func (s *Service) Issue(id string) (Invoice, error) {
 		now := time.Now()
 		invoice.Status = StatusIssued
 		invoice.IssuedAt = now
-		invoice.InvoiceNumber = s.repo.NextInvoiceNumber(now)
+		number, err := s.repo.NextInvoiceNumber(now)
+		if err != nil {
+			return Invoice{}, err
+		}
+		invoice.InvoiceNumber = number
 		return invoice, nil
 	})
 }

@@ -34,7 +34,7 @@ func cloneInvoice(invoice Invoice) Invoice {
 	return invoice
 }
 
-func (r *Repository) NextInvoiceNumber(now time.Time) string {
+func (r *Repository) NextInvoiceNumber(now time.Time) (string, error) {
 	r.counterMu.Lock()
 	defer r.counterMu.Unlock()
 	year := now.Year()
@@ -43,15 +43,15 @@ func (r *Repository) NextInvoiceNumber(now time.Time) string {
 		r.counter = 0
 	}
 	r.counter++
-	return fmt.Sprintf("%d-%04d", year, r.counter)
+	return fmt.Sprintf("%d-%04d", year, r.counter), nil
 }
 
-func (r *Repository) Create(invoice Invoice) Invoice {
+func (r *Repository) Create(invoice Invoice) (Invoice, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	stored := cloneInvoice(invoice)
 	r.invoices[stored.ID] = stored
-	return cloneInvoice(stored)
+	return cloneInvoice(stored), nil
 }
 
 func (r *Repository) GetByID(id string) (Invoice, error) {
@@ -64,14 +64,14 @@ func (r *Repository) GetByID(id string) (Invoice, error) {
 	return cloneInvoice(invoice), nil
 }
 
-func (r *Repository) GetAll() []Invoice {
+func (r *Repository) GetAll() ([]Invoice, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	result := make([]Invoice, 0, len(r.invoices))
 	for _, invoice := range r.invoices {
 		result = append(result, cloneInvoice(invoice))
 	}
-	return result
+	return result, nil
 }
 
 func (r *Repository) Delete(id string) error {
