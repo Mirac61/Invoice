@@ -12,7 +12,7 @@ func newTestService() *Service {
 	return NewService(NewRepository())
 }
 
-func seedDraftInvoice(s *Service) Invoice {
+func seedDraftInvoice(t *testing.T, s *Service) Invoice {
 	invoice := Invoice{
 		Status:       StatusDraft,
 		PaymentDueAt: time.Now().Add(14 * 24 * time.Hour),
@@ -23,12 +23,14 @@ func seedDraftInvoice(s *Service) Invoice {
 		},
 		VATRate: 0.19,
 	}
-	return s.Create(invoice)
+	created, err := s.Create(invoice)
+	require.NoError(t, err)
+	return created
 }
 
 func TestPartialUpdate_NotesOnly_LeavesOtherFieldsUnchanged(t *testing.T) {
 	s := newTestService()
-	created := seedDraftInvoice(s)
+	created := seedDraftInvoice(t, s)
 
 	newNotes := "Bitte bis Ende des Monats zahlen"
 	updated, err := s.PartialUpdate(created.ID, InvoicePatch{Notes: &newNotes})
@@ -70,7 +72,7 @@ func TestPartialUpdate_RecalculatesTotals(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newTestService()
-			created := seedDraftInvoice(s)
+			created := seedDraftInvoice(t, s)
 
 			patch := InvoicePatch{Items: &tt.items, VATRate: &tt.vatRate}
 			updated, err := s.PartialUpdate(created.ID, patch)
@@ -94,7 +96,7 @@ func TestPartialUpdate_UnknownID_ReturnsNotFound(t *testing.T) {
 
 func TestUpdate_PreservesServerManagedFields(t *testing.T) {
 	s := newTestService()
-	created := seedDraftInvoice(s)
+	created := seedDraftInvoice(t, s)
 
 	tampered := created
 	tampered.Status = StatusPaid
@@ -109,19 +111,21 @@ func TestUpdate_PreservesServerManagedFields(t *testing.T) {
 	assert.Equal(t, created.CreatedAt, updated.CreatedAt)
 }
 
-func seedIssuedInvoice(repo *Repository) Invoice {
-	return repo.Create(Invoice{
+func seedIssuedInvoice(t *testing.T, repo *Repository) Invoice {
+	created, err := repo.Create(Invoice{
 		ID:      "issued-1",
 		Status:  StatusIssued,
 		VATRate: 0.19,
 		Items:   []LineItem{{Description: "Beratung", Quantity: 1, UnitPrice: 100}},
 	})
+	require.NoError(t, err)
+	return created
 }
 
 func TestUpdate_NonDraft_ReturnsNotUpdatable(t *testing.T) {
 	repo := NewRepository()
 	s := NewService(repo)
-	issued := seedIssuedInvoice(repo)
+	issued := seedIssuedInvoice(t, repo)
 
 	_, err := s.Update(issued.ID, issued)
 
@@ -131,7 +135,7 @@ func TestUpdate_NonDraft_ReturnsNotUpdatable(t *testing.T) {
 func TestPartialUpdate_NonDraft_ReturnsNotUpdatable(t *testing.T) {
 	repo := NewRepository()
 	s := NewService(repo)
-	issued := seedIssuedInvoice(repo)
+	issued := seedIssuedInvoice(t, repo)
 
 	notes := "egal"
 	_, err := s.PartialUpdate(issued.ID, InvoicePatch{Notes: &notes})
@@ -142,7 +146,7 @@ func TestPartialUpdate_NonDraft_ReturnsNotUpdatable(t *testing.T) {
 func TestDelete_NonDraft_ReturnsNotDeletable(t *testing.T) {
 	repo := NewRepository()
 	s := NewService(repo)
-	issued := seedIssuedInvoice(repo)
+	issued := seedIssuedInvoice(t, repo)
 
 	err := s.Delete(issued.ID)
 
@@ -151,7 +155,7 @@ func TestDelete_NonDraft_ReturnsNotDeletable(t *testing.T) {
 
 func TestDelete_Draft_Succeeds(t *testing.T) {
 	s := newTestService()
-	created := seedDraftInvoice(s)
+	created := seedDraftInvoice(t, s)
 
 	err := s.Delete(created.ID)
 	require.NoError(t, err)
@@ -162,7 +166,7 @@ func TestDelete_Draft_Succeeds(t *testing.T) {
 
 func TestPartialUpdate_InvalidData_ReturnsInvalidInput(t *testing.T) {
 	s := newTestService()
-	created := seedDraftInvoice(s)
+	created := seedDraftInvoice(t, s)
 
 	items := []LineItem{{Description: "X", Quantity: -1, UnitPrice: 10}}
 	_, err := s.PartialUpdate(created.ID, InvoicePatch{Items: &items})
@@ -172,7 +176,7 @@ func TestPartialUpdate_InvalidData_ReturnsInvalidInput(t *testing.T) {
 
 func TestUpdate_InvalidData_ReturnsInvalidInput(t *testing.T) {
 	s := newTestService()
-	created := seedDraftInvoice(s)
+	created := seedDraftInvoice(t, s)
 
 	replacement := created
 	replacement.VATRate = 1.5
@@ -184,7 +188,7 @@ func TestUpdate_InvalidData_ReturnsInvalidInput(t *testing.T) {
 
 func TestIssue_Draft_SetsNumberAndTimestamp(t *testing.T) {
 	s := newTestService()
-	created := seedDraftInvoice(s)
+	created := seedDraftInvoice(t, s)
 
 	issued, err := s.Issue(created.ID)
 
@@ -196,8 +200,8 @@ func TestIssue_Draft_SetsNumberAndTimestamp(t *testing.T) {
 
 func TestIssue_AssignsSequentialNumbers(t *testing.T) {
 	s := newTestService()
-	first := seedDraftInvoice(s)
-	second := seedDraftInvoice(s)
+	first := seedDraftInvoice(t, s)
+	second := seedDraftInvoice(t, s)
 
 	a, err := s.Issue(first.ID)
 	require.NoError(t, err)
@@ -210,7 +214,7 @@ func TestIssue_AssignsSequentialNumbers(t *testing.T) {
 
 func TestIssue_AlreadyIssued_ReturnsInvalidTransition(t *testing.T) {
 	s := newTestService()
-	created := seedDraftInvoice(s)
+	created := seedDraftInvoice(t, s)
 
 	_, err := s.Issue(created.ID)
 	require.NoError(t, err)
@@ -229,7 +233,7 @@ func TestIssue_UnknownID_ReturnsNotFound(t *testing.T) {
 
 func TestIssue_ThenUpdate_ReturnsNotUpdatable(t *testing.T) {
 	s := newTestService()
-	created := seedDraftInvoice(s)
+	created := seedDraftInvoice(t, s)
 
 	issued, err := s.Issue(created.ID)
 	require.NoError(t, err)
@@ -243,6 +247,11 @@ func TestIssue_ThenUpdate_ReturnsNotUpdatable(t *testing.T) {
 func TestNextInvoiceNumber_ResetsOnNewYear(t *testing.T) {
 	repo := NewRepository()
 
-	assert.Equal(t, "2025-0001", repo.NextInvoiceNumber(time.Date(2025, 12, 31, 23, 0, 0, 0, time.UTC)))
-	assert.Equal(t, "2026-0001", repo.NextInvoiceNumber(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)))
+	first, err := repo.nextInvoiceNumber(time.Date(2025, 12, 31, 23, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+	assert.Equal(t, "2025-0001", first)
+
+	second, err := repo.nextInvoiceNumber(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+	assert.Equal(t, "2026-0001", second)
 }

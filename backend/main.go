@@ -1,12 +1,27 @@
 package main
 
 import (
+	"context"
+	"log"
+	"os"
+
+	"github.com/Mirac61/Invoice/backend/config"
 	"github.com/Mirac61/Invoice/backend/invoice"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	ctx := context.Background()
+
+	connString := os.Getenv("DATABASE_URL")
+	pool, err := config.NewPool(ctx, connString)
+	if err != nil {
+		log.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+	log.Println("connected to database successfully")
+
 	r := gin.Default()
 
 	r.Use(cors.New(cors.Config{
@@ -15,7 +30,7 @@ func main() {
 		AllowHeaders: []string{"Content-Type"},
 	}))
 
-	repo := invoice.NewRepository()
+	repo := invoice.NewPostgresRepository(pool)
 	service := invoice.NewService(repo)
 	handler := invoice.NewHandler(service)
 

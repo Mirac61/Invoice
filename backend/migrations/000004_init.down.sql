@@ -1,0 +1,7 @@
+BEGIN;
+
+DROP TABLE IF EXISTS invoice_counters;
+DROP TABLE IF EXISTS invoice_items;
+DROP TABLE IF EXISTS invoices;
+
+COMMIT;
