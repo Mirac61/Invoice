@@ -34,9 +34,10 @@ func cloneInvoice(invoice Invoice) Invoice {
 	return invoice
 }
 
-func (r *Repository) NextInvoiceNumber(now time.Time) (string, error) {
+func (r *Repository) nextInvoiceNumber(now time.Time) (string, error) {
 	r.counterMu.Lock()
 	defer r.counterMu.Unlock()
+
 	year := now.Year()
 	if year != r.counterYear {
 		r.counterYear = year
@@ -49,6 +50,7 @@ func (r *Repository) NextInvoiceNumber(now time.Time) (string, error) {
 func (r *Repository) Create(invoice Invoice) (Invoice, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	stored := cloneInvoice(invoice)
 	r.invoices[stored.ID] = stored
 	return cloneInvoice(stored), nil
@@ -57,6 +59,7 @@ func (r *Repository) Create(invoice Invoice) (Invoice, error) {
 func (r *Repository) GetByID(id string) (Invoice, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	invoice, ok := r.invoices[id]
 	if !ok {
 		return Invoice{}, ErrNotFound
@@ -67,6 +70,7 @@ func (r *Repository) GetByID(id string) (Invoice, error) {
 func (r *Repository) GetAll() ([]Invoice, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	result := make([]Invoice, 0, len(r.invoices))
 	for _, invoice := range r.invoices {
 		result = append(result, cloneInvoice(invoice))
@@ -77,6 +81,7 @@ func (r *Repository) GetAll() ([]Invoice, error) {
 func (r *Repository) Delete(id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	if _, ok := r.invoices[id]; !ok {
 		return ErrNotFound
 	}
@@ -84,22 +89,31 @@ func (r *Repository) Delete(id string) error {
 	return nil
 }
 
-// UpdateFunc mutates an invoice. It runs under the repository lock so that
-// read, modify and write happen atomically.
-type UpdateFunc func(existing Invoice) (Invoice, error)
+// UpdateFunc mutates an invoice. It runs inside the repository transaction so
+// that read, modify and write happen atomically. nextNumber draws the next
+// invoice number from the same transaction and must only be called when the
+// number is actually used.
+type UpdateFunc func(existing Invoice, nextNumber func() (string, error)) (Invoice, error)
 
 func (r *Repository) Update(id string, fn UpdateFunc) (Invoice, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	existing, ok := r.invoices[id]
 	if !ok {
 		return Invoice{}, ErrNotFound
 	}
-	updated, err := fn(cloneInvoice(existing))
+
+	nextNumber := func() (string, error) {
+		return r.nextInvoiceNumber(time.Now())
+	}
+
+	updated, err := fn(cloneInvoice(existing), nextNumber)
 	if err != nil {
 		return Invoice{}, err
 	}
 	updated.ID = existing.ID
+
 	stored := cloneInvoice(updated)
 	r.invoices[id] = stored
 	return cloneInvoice(stored), nil

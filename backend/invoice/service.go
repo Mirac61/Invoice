@@ -13,7 +13,6 @@ type invoiceRepository interface {
 	GetAll() ([]Invoice, error)
 	Delete(id string) error
 	Update(id string, fn UpdateFunc) (Invoice, error)
-	NextInvoiceNumber(now time.Time) (string, error)
 }
 
 type Service struct {
@@ -24,10 +23,20 @@ func NewService(repo invoiceRepository) *Service {
 	return &Service{repo: repo}
 }
 
-func calculateTotals(items []LineItem, vatRate float64) (net, vat, gross float64) {
+func prepareItems(items []LineItem) {
 	for i := range items {
+		if items[i].ID == "" {
+			items[i].ID = uuid.NewString()
+		}
+		items[i].Position = i + 1
 		items[i].Total = math.Round(float64(items[i].Quantity)*items[i].UnitPrice*100) / 100
-		net += items[i].Total
+	}
+}
+
+func calculateTotals(items []LineItem, vatRate float64) (net, vat, gross float64) {
+	prepareItems(items)
+	for _, item := range items {
+		net += item.Total
 	}
 	net = math.Round(net*100) / 100
 	vat = math.Round(net*vatRate*100) / 100
@@ -51,13 +60,21 @@ func validateInvoiceData(items []LineItem, vatRate float64) error {
 }
 
 func (s *Service) Create(invoice Invoice) (Invoice, error) {
+	if err := validateInvoiceData(invoice.Items, invoice.VATRate); err != nil {
+		return Invoice{}, err
+	}
+
 	invoice.ID = uuid.NewString()
-	invoice.CreatedAt = time.Now()
+	// Postgres TIMESTAMPTZ stores microsecond precision, so truncate here to
+	// keep the in-memory value equal to what a later read from the DB returns.
+	invoice.CreatedAt = time.Now().Truncate(time.Microsecond)
 	invoice.Status = StatusDraft
-	invoice.NetTotal, invoice.VATAmount, invoice.GrossTotal = calculateTotals(invoice.Items, invoice.VATRate)
+
 	for i := range invoice.Items {
 		invoice.Items[i].ID = uuid.NewString()
 	}
+	invoice.NetTotal, invoice.VATAmount, invoice.GrossTotal = calculateTotals(invoice.Items, invoice.VATRate)
+
 	return s.repo.Create(invoice)
 }
 
@@ -81,30 +98,32 @@ func (s *Service) Delete(id string) error {
 }
 
 func (s *Service) Update(id string, replacement Invoice) (Invoice, error) {
-	mutate := func(invoice Invoice) (Invoice, error) {
+	mutate := func(invoice Invoice, _ func() (string, error)) (Invoice, error) {
 		if invoice.Status != StatusDraft {
 			return Invoice{}, ErrNotUpdatable
 		}
+
 		replacement.ID = invoice.ID
 		replacement.InvoiceNumber = invoice.InvoiceNumber
 		replacement.Status = invoice.Status
 		replacement.CreatedAt = invoice.CreatedAt
 		replacement.IssuedAt = invoice.IssuedAt
+
 		if err := validateInvoiceData(replacement.Items, replacement.VATRate); err != nil {
 			return Invoice{}, err
 		}
 		replacement.NetTotal, replacement.VATAmount, replacement.GrossTotal = calculateTotals(replacement.Items, replacement.VATRate)
 		return replacement, nil
 	}
-
 	return s.repo.Update(id, mutate)
 }
 
 func (s *Service) PartialUpdate(id string, patch InvoicePatch) (Invoice, error) {
-	mutate := func(invoice Invoice) (Invoice, error) {
+	mutate := func(invoice Invoice, _ func() (string, error)) (Invoice, error) {
 		if invoice.Status != StatusDraft {
 			return Invoice{}, ErrNotUpdatable
 		}
+
 		if patch.Items != nil {
 			invoice.Items = *patch.Items
 		}
@@ -120,28 +139,29 @@ func (s *Service) PartialUpdate(id string, patch InvoicePatch) (Invoice, error) 
 		if patch.VATRate != nil {
 			invoice.VATRate = *patch.VATRate
 		}
+
 		if err := validateInvoiceData(invoice.Items, invoice.VATRate); err != nil {
 			return Invoice{}, err
 		}
 		invoice.NetTotal, invoice.VATAmount, invoice.GrossTotal = calculateTotals(invoice.Items, invoice.VATRate)
 		return invoice, nil
 	}
-
 	return s.repo.Update(id, mutate)
 }
 
 func (s *Service) Issue(id string) (Invoice, error) {
-	return s.repo.Update(id, func(invoice Invoice) (Invoice, error) {
+	return s.repo.Update(id, func(invoice Invoice, nextNumber func() (string, error)) (Invoice, error) {
 		if invoice.Status != StatusDraft {
 			return Invoice{}, ErrInvalidTransition
 		}
-		now := time.Now()
-		invoice.Status = StatusIssued
-		invoice.IssuedAt = now
-		number, err := s.repo.NextInvoiceNumber(now)
+
+		number, err := nextNumber()
 		if err != nil {
 			return Invoice{}, err
 		}
+
+		invoice.Status = StatusIssued
+		invoice.IssuedAt = time.Now().Truncate(time.Microsecond)
 		invoice.InvoiceNumber = number
 		return invoice, nil
 	})

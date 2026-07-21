@@ -11,6 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const invoiceColumns = `
+	id, invoice_number, status, created_at, issued_at, payment_due_at,
+	sender_name, sender_street, sender_zip, sender_city, sender_country, sender_email, sender_phone, sender_tax_id,
+	recipient_name, recipient_street, recipient_zip, recipient_city, recipient_country, recipient_email, recipient_phone, recipient_tax_id,
+	vat_rate, net_total, vat_amount, gross_total, notes`
+
+const itemColumns = `id, invoice_id, position, description, quantity, unit_price, unit, total`
+
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
 type PostgresRepository struct {
 	pool *pgxpool.Pool
 }
@@ -19,26 +31,70 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
-func (r *PostgresRepository) GetByID(id string) (Invoice, error) {
-	ctx := context.Background()
+func scanInvoice(row rowScanner) (Invoice, error) {
 	var invoice Invoice
-
-	row := r.pool.QueryRow(ctx, `
-		SELECT
-			id, invoice_number, status, created_at, issued_at, payment_due_at,
-			sender_name, sender_street, sender_zip, sender_city, sender_country, sender_email, sender_phone, sender_tax_id,
-			recipient_name, recipient_street, recipient_zip, recipient_city, recipient_country, recipient_email, recipient_phone, recipient_tax_id,
-			vat_rate, net_total, vat_amount, gross_total, notes
-		FROM invoices
-		WHERE id = $1
-	`, id)
-
 	err := row.Scan(
 		&invoice.ID, &invoice.InvoiceNumber, &invoice.Status, &invoice.CreatedAt, &invoice.IssuedAt, &invoice.PaymentDueAt,
 		&invoice.Sender.Name, &invoice.Sender.Street, &invoice.Sender.Zip, &invoice.Sender.City, &invoice.Sender.Country, &invoice.Sender.Email, &invoice.Sender.Phone, &invoice.Sender.TaxID,
 		&invoice.Recipient.Name, &invoice.Recipient.Street, &invoice.Recipient.Zip, &invoice.Recipient.City, &invoice.Recipient.Country, &invoice.Recipient.Email, &invoice.Recipient.Phone, &invoice.Recipient.TaxID,
 		&invoice.VATRate, &invoice.NetTotal, &invoice.VATAmount, &invoice.GrossTotal, &invoice.Notes,
 	)
+	return invoice, err
+}
+
+func scanItem(row rowScanner) (LineItem, error) {
+	var item LineItem
+	err := row.Scan(&item.ID, &item.InvoiceID, &item.Position, &item.Description, &item.Quantity, &item.UnitPrice, &item.Unit, &item.Total)
+	return item, err
+}
+
+func loadItems(ctx context.Context, q queryer, invoiceID string) ([]LineItem, error) {
+	rows, err := q.Query(ctx, `
+		SELECT `+itemColumns+`
+		FROM invoice_items
+		WHERE invoice_id = $1
+		ORDER BY position
+	`, invoiceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]LineItem, 0)
+	for rows.Next() {
+		item, err := scanItem(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func insertItems(ctx context.Context, tx pgx.Tx, invoiceID string, items []LineItem) error {
+	for _, item := range items {
+		_, err := tx.Exec(ctx, `
+			INSERT INTO invoice_items (`+itemColumns+`)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`, item.ID, invoiceID, item.Position, item.Description, item.Quantity, item.UnitPrice, item.Unit, item.Total)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// queryer covers both *pgxpool.Pool and pgx.Tx so the same read path works
+// inside and outside a transaction.
+type queryer interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+func (r *PostgresRepository) GetByID(id string) (Invoice, error) {
+	ctx := context.Background()
+
+	invoice, err := scanInvoice(r.pool.QueryRow(ctx, `SELECT `+invoiceColumns+` FROM invoices WHERE id = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Invoice{}, ErrNotFound
 	}
@@ -46,63 +102,68 @@ func (r *PostgresRepository) GetByID(id string) (Invoice, error) {
 		return Invoice{}, err
 	}
 
-	rows, err := r.pool.Query(ctx, `
-		SELECT id, invoice_id, position, description, quantity, unit_price, unit, total
-		FROM invoice_items
-		WHERE invoice_id = $1
-		ORDER BY position
-	`, id)
+	invoice.Items, err = loadItems(ctx, r.pool, invoice.ID)
 	if err != nil {
 		return Invoice{}, err
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var item LineItem
-		if err := rows.Scan(&item.ID, &item.InvoiceID, &item.Position, &item.Description, &item.Quantity, &item.UnitPrice, &item.Unit, &item.Total); err != nil {
-			return Invoice{}, err
-		}
-		invoice.Items = append(invoice.Items, item)
-	}
-	if err := rows.Err(); err != nil {
-		return Invoice{}, err
-	}
-
 	return invoice, nil
 }
 
 func (r *PostgresRepository) GetAll() ([]Invoice, error) {
 	ctx := context.Background()
 
-	rows, err := r.pool.Query(ctx, `
-		SELECT
-			id, invoice_number, status, created_at, issued_at, payment_due_at,
-			sender_name, sender_street, sender_zip, sender_city, sender_country, sender_email, sender_phone, sender_tax_id,
-			recipient_name, recipient_street, recipient_zip, recipient_city, recipient_country, recipient_email, recipient_phone, recipient_tax_id,
-			vat_rate, net_total, vat_amount, gross_total, notes
-		FROM invoices
-	`)
+	rows, err := r.pool.Query(ctx, `SELECT `+invoiceColumns+` FROM invoices ORDER BY created_at`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var invoices []Invoice
+	invoices := make([]Invoice, 0)
 	for rows.Next() {
-		var invoice Invoice
-		err := rows.Scan(
-			&invoice.ID, &invoice.InvoiceNumber, &invoice.Status, &invoice.CreatedAt, &invoice.IssuedAt, &invoice.PaymentDueAt,
-			&invoice.Sender.Name, &invoice.Sender.Street, &invoice.Sender.Zip, &invoice.Sender.City, &invoice.Sender.Country, &invoice.Sender.Email, &invoice.Sender.Phone, &invoice.Sender.TaxID,
-			&invoice.Recipient.Name, &invoice.Recipient.Street, &invoice.Recipient.Zip, &invoice.Recipient.City, &invoice.Recipient.Country, &invoice.Recipient.Email, &invoice.Recipient.Phone, &invoice.Recipient.TaxID,
-			&invoice.VATRate, &invoice.NetTotal, &invoice.VATAmount, &invoice.GrossTotal, &invoice.Notes,
-		)
+		invoice, err := scanInvoice(rows)
 		if err != nil {
 			return nil, err
 		}
+		invoice.Items = make([]LineItem, 0)
 		invoices = append(invoices, invoice)
 	}
-
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(invoices) == 0 {
+		return invoices, nil
+	}
+
+	ids := make([]string, 0, len(invoices))
+	index := make(map[string]int, len(invoices))
+	for i, invoice := range invoices {
+		ids = append(ids, invoice.ID)
+		index[invoice.ID] = i
+	}
+
+	itemRows, err := r.pool.Query(ctx, `
+		SELECT `+itemColumns+`
+		FROM invoice_items
+		WHERE invoice_id = ANY($1::uuid[])
+		ORDER BY invoice_id, position
+	`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer itemRows.Close()
+
+	for itemRows.Next() {
+		item, err := scanItem(itemRows)
+		if err != nil {
+			return nil, err
+		}
+		i, ok := index[item.InvoiceID]
+		if !ok {
+			continue
+		}
+		invoices[i].Items = append(invoices[i].Items, item)
+	}
+	if err := itemRows.Err(); err != nil {
 		return nil, err
 	}
 
@@ -117,29 +178,14 @@ func (r *PostgresRepository) Create(invoice Invoice) (Invoice, error) {
 	}
 	defer tx.Rollback(ctx)
 
-	_, err = tx.Exec(ctx, `
-		INSERT INTO invoices (
-			id, invoice_number, status, created_at, issued_at, payment_due_at,
-			sender_name, sender_street, sender_zip, sender_city, sender_country, sender_email, sender_phone, sender_tax_id,
-			recipient_name, recipient_street, recipient_zip, recipient_city, recipient_country, recipient_email, recipient_phone, recipient_tax_id,
-			vat_rate, net_total, vat_amount, gross_total, notes
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
-	`, invoice.ID, invoice.InvoiceNumber, invoice.Status, invoice.CreatedAt, invoice.IssuedAt, invoice.PaymentDueAt,
-		invoice.Sender.Name, invoice.Sender.Street, invoice.Sender.Zip, invoice.Sender.City, invoice.Sender.Country, invoice.Sender.Email, invoice.Sender.Phone, invoice.Sender.TaxID,
-		invoice.Recipient.Name, invoice.Recipient.Street, invoice.Recipient.Zip, invoice.Recipient.City, invoice.Recipient.Country, invoice.Recipient.Email, invoice.Recipient.Phone, invoice.Recipient.TaxID,
-		invoice.VATRate, invoice.NetTotal, invoice.VATAmount, invoice.GrossTotal, invoice.Notes)
-	if err != nil {
+	if err := insertInvoice(ctx, tx, invoice); err != nil {
 		return Invoice{}, err
 	}
-
-	for _, item := range invoice.Items {
-		_, err = tx.Exec(ctx, `
-			INSERT INTO invoice_items (id, invoice_id, position, description, quantity, unit_price, unit, total)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		`, item.ID, invoice.ID, item.Position, item.Description, item.Quantity, item.UnitPrice, item.Unit, item.Total)
-		if err != nil {
-			return Invoice{}, err
-		}
+	for i := range invoice.Items {
+		invoice.Items[i].InvoiceID = invoice.ID
+	}
+	if err := insertItems(ctx, tx, invoice.ID, invoice.Items); err != nil {
+		return Invoice{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -148,29 +194,38 @@ func (r *PostgresRepository) Create(invoice Invoice) (Invoice, error) {
 	return invoice, nil
 }
 
+func insertInvoice(ctx context.Context, tx pgx.Tx, invoice Invoice) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO invoices (`+invoiceColumns+`)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+	`, invoice.ID, invoice.InvoiceNumber, invoice.Status, invoice.CreatedAt, invoice.IssuedAt, invoice.PaymentDueAt,
+		invoice.Sender.Name, invoice.Sender.Street, invoice.Sender.Zip, invoice.Sender.City, invoice.Sender.Country, invoice.Sender.Email, invoice.Sender.Phone, invoice.Sender.TaxID,
+		invoice.Recipient.Name, invoice.Recipient.Street, invoice.Recipient.Zip, invoice.Recipient.City, invoice.Recipient.Country, invoice.Recipient.Email, invoice.Recipient.Phone, invoice.Recipient.TaxID,
+		invoice.VATRate, invoice.NetTotal, invoice.VATAmount, invoice.GrossTotal, invoice.Notes)
+	return err
+}
+
 func (r *PostgresRepository) Delete(id string) error {
 	ctx := context.Background()
 
-	commandTag, err := r.pool.Exec(ctx, `DELETE FROM invoices WHERE id = $1`, id)
+	tag, err := r.pool.Exec(ctx, `DELETE FROM invoices WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}
-	if commandTag.RowsAffected() == 0 {
+	if tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
 	return nil
 }
 
-func (r *PostgresRepository) NextInvoiceNumber(now time.Time) (string, error) {
-	ctx := context.Background()
-	row := r.pool.QueryRow(ctx, `
+func nextInvoiceNumber(ctx context.Context, tx pgx.Tx, now time.Time) (string, error) {
+	var counter int
+	err := tx.QueryRow(ctx, `
 		INSERT INTO invoice_counters (year, counter) VALUES ($1, 1)
 		ON CONFLICT (year) DO UPDATE SET counter = invoice_counters.counter + 1
 		RETURNING counter
-	`, now.Year())
-
-	var counter int
-	if err := row.Scan(&counter); err != nil {
+	`, now.Year()).Scan(&counter)
+	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%d-%04d", now.Year(), counter), nil
@@ -184,24 +239,7 @@ func (r *PostgresRepository) Update(id string, fn UpdateFunc) (Invoice, error) {
 	}
 	defer tx.Rollback(ctx)
 
-	var existing Invoice
-	row := tx.QueryRow(ctx, `
-		SELECT
-			id, invoice_number, status, created_at, issued_at, payment_due_at,
-			sender_name, sender_street, sender_zip, sender_city, sender_country, sender_email, sender_phone, sender_tax_id,
-			recipient_name, recipient_street, recipient_zip, recipient_city, recipient_country, recipient_email, recipient_phone, recipient_tax_id,
-			vat_rate, net_total, vat_amount, gross_total, notes
-		FROM invoices
-		WHERE id = $1
-		FOR UPDATE
-	`, id)
-
-	err = row.Scan(
-		&existing.ID, &existing.InvoiceNumber, &existing.Status, &existing.CreatedAt, &existing.IssuedAt, &existing.PaymentDueAt,
-		&existing.Sender.Name, &existing.Sender.Street, &existing.Sender.Zip, &existing.Sender.City, &existing.Sender.Country, &existing.Sender.Email, &existing.Sender.Phone, &existing.Sender.TaxID,
-		&existing.Recipient.Name, &existing.Recipient.Street, &existing.Recipient.Zip, &existing.Recipient.City, &existing.Recipient.Country, &existing.Recipient.Email, &existing.Recipient.Phone, &existing.Recipient.TaxID,
-		&existing.VATRate, &existing.NetTotal, &existing.VATAmount, &existing.GrossTotal, &existing.Notes,
-	)
+	existing, err := scanInvoice(tx.QueryRow(ctx, `SELECT `+invoiceColumns+` FROM invoices WHERE id = $1 FOR UPDATE`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Invoice{}, ErrNotFound
 	}
@@ -209,29 +247,16 @@ func (r *PostgresRepository) Update(id string, fn UpdateFunc) (Invoice, error) {
 		return Invoice{}, err
 	}
 
-	itemRows, err := tx.Query(ctx, `
-		SELECT id, invoice_id, position, description, quantity, unit_price, unit, total
-		FROM invoice_items
-		WHERE invoice_id = $1
-		ORDER BY position
-	`, id)
+	existing.Items, err = loadItems(ctx, tx, existing.ID)
 	if err != nil {
 		return Invoice{}, err
 	}
-	for itemRows.Next() {
-		var item LineItem
-		if err := itemRows.Scan(&item.ID, &item.InvoiceID, &item.Position, &item.Description, &item.Quantity, &item.UnitPrice, &item.Unit, &item.Total); err != nil {
-			itemRows.Close()
-			return Invoice{}, err
-		}
-		existing.Items = append(existing.Items, item)
-	}
-	itemRows.Close()
-	if err := itemRows.Err(); err != nil {
-		return Invoice{}, err
+
+	nextNumber := func() (string, error) {
+		return nextInvoiceNumber(ctx, tx, time.Now())
 	}
 
-	updated, err := fn(existing)
+	updated, err := fn(existing, nextNumber)
 	if err != nil {
 		return Invoice{}, err
 	}
@@ -252,21 +277,17 @@ func (r *PostgresRepository) Update(id string, fn UpdateFunc) (Invoice, error) {
 		return Invoice{}, err
 	}
 
-	_, err = tx.Exec(ctx, `DELETE FROM invoice_items WHERE invoice_id = $1`, updated.ID)
-	if err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM invoice_items WHERE invoice_id = $1`, updated.ID); err != nil {
 		return Invoice{}, err
 	}
-	for _, item := range updated.Items {
-		if item.ID == "" {
-			item.ID = uuid.NewString()
+	for i := range updated.Items {
+		if updated.Items[i].ID == "" {
+			updated.Items[i].ID = uuid.NewString()
 		}
-		_, err = tx.Exec(ctx, `
-			INSERT INTO invoice_items (id, invoice_id, position, description, quantity, unit_price, unit, total)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		`, item.ID, updated.ID, item.Position, item.Description, item.Quantity, item.UnitPrice, item.Unit, item.Total)
-		if err != nil {
-			return Invoice{}, err
-		}
+		updated.Items[i].InvoiceID = updated.ID
+	}
+	if err := insertItems(ctx, tx, updated.ID, updated.Items); err != nil {
+		return Invoice{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {

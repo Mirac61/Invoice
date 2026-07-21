@@ -1,1 +1,0 @@
-DROP TABLE invoice_counters;
