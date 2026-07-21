@@ -5,8 +5,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/Mirac61/Invoice/backend/config"
-	"github.com/Mirac61/Invoice/backend/invoice"
+	"github.com/Mirac61/Invoice/backend/internal/config"
+	"github.com/Mirac61/Invoice/backend/internal/invoice"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
