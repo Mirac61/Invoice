@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Mirac61/Invoice/backend/config"
+	"github.com/Mirac61/Invoice/backend/internal/db"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestPostgresGetByID(t *testing.T) {
-	pool, err := config.NewPool(context.Background(), "postgres://invoice_user:bevvyr-9fexki-qyhQup@localhost:5432/invoice_db?sslmode=disable")
+	pool, err := db.NewPool(context.Background(), "postgres://invoice_user:bevvyr-9fexki-qyhQup@localhost:5432/invoice_db?sslmode=disable")
 	require.NoError(t, err)
 	defer pool.Close()
 

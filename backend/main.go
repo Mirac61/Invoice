@@ -5,8 +5,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/Mirac61/Invoice/backend/config"
-	"github.com/Mirac61/Invoice/backend/invoice"
+	"github.com/Mirac61/Invoice/backend/internal/db"
+	"github.com/Mirac61/Invoice/backend/internal/invoice"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
@@ -15,7 +15,7 @@ func main() {
 	ctx := context.Background()
 
 	connString := os.Getenv("DATABASE_URL")
-	pool, err := config.NewPool(ctx, connString)
+	pool, err := db.NewPool(ctx, connString)
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}

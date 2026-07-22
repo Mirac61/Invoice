@@ -1,18 +1,9 @@
 package invoice
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"time"
-)
-
-var (
-	ErrNotFound          = errors.New("invoice not found")
-	ErrNotDeletable      = errors.New("invoice isn't deletable")
-	ErrNotUpdatable      = errors.New("invoice not updatable")
-	ErrInvalidInput      = errors.New("invalid invoice data")
-	ErrInvalidTransition = errors.New("invalid status transition")
 )
 
 type Repository struct {
