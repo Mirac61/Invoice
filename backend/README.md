@@ -1,0 +1,54 @@
+# Invoice Backend
+
+Go/Gin REST API für Rechnungsverwaltung, Postgres-Persistenz via `pgx`.
+
+## Setup
+
+```bash
+cp .env.example .env   # DATABASE_URL, POSTGRES_USER/PASSWORD/DB ausfüllen
+docker compose up -d postgres
+migrate -path migrations -database "$DATABASE_URL" up
+go run .
+```
+
+Server läuft auf `:8080`.
+
+## Tests
+
+```bash
+go test ./...
+./test-api.sh      # Server muss laufen
+./smoke_test.sh    # Server + Postgres müssen laufen
+```
+
+## API
+
+Alle Endpunkte unter `/api/invoices`:
+
+| Methode | Pfad | Beschreibung |
+|---|---|---|
+| POST | `/` | Rechnung anlegen (Status `draft`) |
+| GET | `/` | Alle Rechnungen |
+| GET | `/:id` | Einzelne Rechnung |
+| PUT | `/:id` | Komplett ersetzen (Server-Felder wie `status`, `invoiceNumber` bleiben geschützt) |
+| PATCH | `/:id` | Teilweise ändern |
+| DELETE | `/:id` | Löschen (nur Drafts) |
+| POST | `/:id/issue` | Rechnungsnummer vergeben, Status → `issued`, danach eingefroren |
+
+## Geldbeträge: Cent als Integer
+
+`unitPrice`, `total`, `netTotal`, `vatAmount` und `grossTotal` sind **Integer in Cent**,
+nicht Euro mit Nachkommastellen:
+
+```json
+{ "unitPrice": 3333, "quantity": 3, "total": 9999 }
+```
+
+`3333` bedeutet `33,33 €`. `float64` kann Centbeträge nicht exakt darstellen (Rundungsfehler
+summieren sich über mehrere Positionen) — für Rechnungen ist das inakzeptabel, daher
+Ganzzahl-Cent (`type Money int64`, siehe `internal/invoice/money.go`).
+
+`vatRate` bleibt ein Dezimalwert (`0.19` = 19 %), das ist ein Satz, kein Geldbetrag.
+
+**Breaking Change fürs Frontend:** Beträge müssen beim Anzeigen durch 100 geteilt und mit
+zwei Nachkommastellen formatiert werden, statt sie direkt als Euro-Float zu interpretieren.

@@ -47,25 +47,25 @@ func TestPartialUpdate_RecalculatesTotals(t *testing.T) {
 		name      string
 		items     []LineItem
 		vatRate   float64
-		wantNet   float64
-		wantVAT   float64
-		wantGross float64
+		wantNet   Money
+		wantVAT   Money
+		wantGross Money
 	}{
 		{
 			name:      "standard VAT rate",
-			items:     []LineItem{{Description: "Beratung", Quantity: 3, UnitPrice: 150}},
+			items:     []LineItem{{Description: "Beratung", Quantity: 3, UnitPrice: 15000}},
 			vatRate:   0.19,
-			wantNet:   450,
-			wantVAT:   85.5,
-			wantGross: 535.5,
+			wantNet:   45000,
+			wantVAT:   8550,
+			wantGross: 53550,
 		},
 		{
 			name:      "reduced VAT rate",
-			items:     []LineItem{{Description: "Buch", Quantity: 1, UnitPrice: 20}},
+			items:     []LineItem{{Description: "Buch", Quantity: 1, UnitPrice: 2000}},
 			vatRate:   0.07,
-			wantNet:   20,
-			wantVAT:   1.4,
-			wantGross: 21.4,
+			wantNet:   2000,
+			wantVAT:   140,
+			wantGross: 2140,
 		},
 	}
 

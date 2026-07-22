@@ -62,7 +62,7 @@ draft_payload=$(cat <<EOF
     "city": "Stuttgart", "country": "DE"
   },
   "items": [
-    { "description": "Beratung", "quantity": 3, "unitPrice": 150, "unit": "h" }
+    { "description": "Beratung", "quantity": 3, "unitPrice": 15000, "unit": "h" }
   ],
   "vatRate": 0.19,
   "notes": "initial"
@@ -74,12 +74,12 @@ bold "== 1. POST /invoices creates a draft =="
 request POST "$INVOICES" "$draft_payload"
 check "status code" "201" "$STATUS"
 check "status is draft" "draft" "$(field '.status')"
-check "net total" "450" "$(field '.netTotal')"
-check "vat amount" "85.5" "$(field '.vatAmount')"
-check "gross total" "535.5" "$(field '.grossTotal')"
+check "net total" "45000" "$(field '.netTotal')"
+check "vat amount" "8550" "$(field '.vatAmount')"
+check "gross total" "53550" "$(field '.grossTotal')"
 check "invoice number empty on draft" "" "$(field '.invoiceNumber')"
 check "item position is 1-based" "1" "$(field '.items[0].position')"
-check "item total" "450" "$(field '.items[0].total')"
+check "item total" "45000" "$(field '.items[0].total')"
 check "item has an id" "true" "$(field '.items[0].id | length > 0')"
 
 invoice_id=$(field '.id')
@@ -90,7 +90,7 @@ echo "  invoice id: $invoice_id"
 bold "== 2. GET /invoices/:id returns the same data =="
 request GET "$INVOICES/$invoice_id"
 check "status code" "200" "$STATUS"
-check "gross total" "535.5" "$(field '.grossTotal')"
+check "gross total" "53550" "$(field '.grossTotal')"
 check "items are loaded" "1" "$(field '.items | length')"
 check "notes" "initial" "$(field '.notes')"
 
@@ -104,17 +104,17 @@ bold "== 4. PATCH notes leaves everything else untouched =="
 request PATCH "$INVOICES/$invoice_id" '{"notes": "please pay by end of month"}'
 check "status code" "200" "$STATUS"
 check "notes updated" "please pay by end of month" "$(field '.notes')"
-check "gross total unchanged" "535.5" "$(field '.grossTotal')"
+check "gross total unchanged" "53550" "$(field '.grossTotal')"
 check "recipient unchanged" "Recipient GmbH" "$(field '.recipient.name')"
 check "created at unchanged" "$created_at" "$(field '.createdAt')"
 
 bold "== 5. PATCH items recalculates totals and renumbers positions =="
 request PATCH "$INVOICES/$invoice_id" \
-    '{"items": [{"description": "Buch", "quantity": 1, "unitPrice": 20}, {"description": "Versand", "quantity": 2, "unitPrice": 5}], "vatRate": 0.07}'
+    '{"items": [{"description": "Buch", "quantity": 1, "unitPrice": 2000}, {"description": "Versand", "quantity": 2, "unitPrice": 500}], "vatRate": 0.07}'
 check "status code" "200" "$STATUS"
-check "net total" "30" "$(field '.netTotal')"
-check "vat amount" "2.1" "$(field '.vatAmount')"
-check "gross total" "32.1" "$(field '.grossTotal')"
+check "net total" "3000" "$(field '.netTotal')"
+check "vat amount" "210" "$(field '.vatAmount')"
+check "gross total" "3210" "$(field '.grossTotal')"
 check "item count" "2" "$(field '.items | length')"
 check "first position" "1" "$(field '.items[0].position')"
 check "second position" "2" "$(field '.items[1].position')"

@@ -70,8 +70,8 @@ new_invoice='{
   },
   "vatRate": 0.19,
   "items": [
-    { "description": "Beratung", "quantity": 10, "unitPrice": 120.0, "unit": "Std" },
-    { "description": "Lizenz",   "quantity": 1,  "unitPrice": 499.0, "unit": "Stück" }
+    { "description": "Beratung", "quantity": 10, "unitPrice": 12000, "unit": "Std" },
+    { "description": "Lizenz",   "quantity": 1,  "unitPrice": 49900, "unit": "Stück" }
   ],
   "notes": "Zahlbar innerhalb von 14 Tagen."
 }'
