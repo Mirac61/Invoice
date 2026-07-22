@@ -186,6 +186,18 @@ func TestUpdate_InvalidData_ReturnsInvalidInput(t *testing.T) {
 	assert.ErrorIs(t, err, ErrInvalidInput)
 }
 
+func TestUpdate_FractionalVATRate_ReturnsInvalidInput(t *testing.T) {
+	s := newTestService()
+	created := seedDraftInvoice(t, s)
+
+	replacement := created
+	replacement.VATRate = 0.195
+
+	_, err := s.Update(created.ID, replacement)
+
+	assert.ErrorIs(t, err, ErrInvalidInput)
+}
+
 func TestIssue_Draft_SetsNumberAndTimestamp(t *testing.T) {
 	s := newTestService()
 	created := seedDraftInvoice(t, s)

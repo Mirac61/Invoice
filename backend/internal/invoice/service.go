@@ -48,6 +48,9 @@ func validateInvoiceData(items []LineItem, vatRate float64) error {
 	if vatRate < 0 || vatRate > 1 {
 		return ErrInvalidInput
 	}
+	if percent := vatRate * 100; math.Abs(percent-math.Round(percent)) > 1e-9 {
+		return ErrInvalidInput
+	}
 	if len(items) == 0 {
 		return ErrInvalidInput
 	}
