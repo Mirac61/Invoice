@@ -29,23 +29,26 @@ func prepareItems(items []LineItem) {
 			items[i].ID = uuid.NewString()
 		}
 		items[i].Position = i + 1
-		items[i].Total = math.Round(float64(items[i].Quantity)*items[i].UnitPrice*100) / 100
+		items[i].Total = Money(items[i].Quantity) * items[i].UnitPrice
 	}
 }
 
-func calculateTotals(items []LineItem, vatRate float64) (net, vat, gross float64) {
+func calculateTotals(items []LineItem, vatRate float64) (net, vat, gross Money) {
 	prepareItems(items)
 	for _, item := range items {
 		net += item.Total
 	}
-	net = math.Round(net*100) / 100
-	vat = math.Round(net*vatRate*100) / 100
-	gross = math.Round((net+vat)*100) / 100
+	ratePercent := int64(math.Round(vatRate * 100))
+	vat = RoundedVAT(net, ratePercent)
+	gross = net + vat
 	return
 }
 
 func validateInvoiceData(items []LineItem, vatRate float64) error {
 	if vatRate < 0 || vatRate > 1 {
+		return ErrInvalidInput
+	}
+	if percent := vatRate * 100; math.Abs(percent-math.Round(percent)) > 1e-9 {
 		return ErrInvalidInput
 	}
 	if len(items) == 0 {

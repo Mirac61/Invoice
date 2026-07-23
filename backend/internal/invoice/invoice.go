@@ -30,9 +30,9 @@ type Invoice struct {
 	Recipient     Contact       `json:"recipient" binding:"required"`
 	Items         []LineItem    `json:"items" binding:"required,min=1,dive"`
 	VATRate       float64       `json:"vatRate" binding:"gte=0,lte=1"`
-	NetTotal      float64       `json:"netTotal"`
-	VATAmount     float64       `json:"vatAmount"`
-	GrossTotal    float64       `json:"grossTotal"`
+	NetTotal      Money         `json:"netTotal"`
+	VATAmount     Money         `json:"vatAmount"`
+	GrossTotal    Money         `json:"grossTotal"`
 	Notes         string        `json:"notes"`
 }
 
@@ -48,12 +48,12 @@ type Contact struct {
 }
 
 type LineItem struct {
-	ID          string  `json:"id"`
-	InvoiceID   string  `json:"invoiceId"`
-	Position    int     `json:"position"`
-	Description string  `json:"description" binding:"required"`
-	Quantity    int     `json:"quantity" binding:"gt=0"`
-	UnitPrice   float64 `json:"unitPrice" binding:"gte=0"`
-	Unit        string  `json:"unit"`
-	Total       float64 `json:"total"`
+	ID          string `json:"id"`
+	InvoiceID   string `json:"invoiceId"`
+	Position    int    `json:"position"`
+	Description string `json:"description" binding:"required"`
+	Quantity    int    `json:"quantity" binding:"gt=0"`
+	UnitPrice   Money  `json:"unitPrice" binding:"gte=0"`
+	Unit        string `json:"unit"`
+	Total       Money  `json:"total"`
 }
